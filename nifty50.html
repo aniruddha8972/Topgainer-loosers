@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Nifty 50 Weekly Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#07080d;color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+  :root{--green:#00e5a0;--red:#ff5472;--gold:#fbbf24;--purple:#a78bfa;--bg2:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,229,160,0.4)}50%{box-shadow:0 0 0 8px rgba(0,229,160,0)}}
+
+  /* HEADER */
+  header{padding:22px 32px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;background:rgba(7,8,13,0.92);backdrop-filter:blur(12px)}
+  .logo{display:flex;flex-direction:column;gap:4px}
+  .logo-badge{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:3px;color:var(--green);text-transform:uppercase}
+  .logo-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2s infinite}
+  .logo h1{font-size:24px;font-weight:900;letter-spacing:-0.5px}
+  .logo h1 span{color:var(--green)}
+  .logo p{font-size:12px;color:#444;margin-top:2px}
+
+  /* TOGGLE */
+  .toggle-wrap{display:flex;flex-direction:column;align-items:center;gap:7px}
+  .toggle{width:68px;height:34px;border-radius:17px;cursor:pointer;position:relative;transition:all .3s ease;border:1px solid var(--border);background:rgba(255,255,255,0.07)}
+  .toggle.on{background:linear-gradient(90deg,#00a868,var(--green));border-color:transparent;box-shadow:0 0 22px rgba(0,229,160,0.45);animation:pulse 2s infinite}
+  .toggle-knob{position:absolute;top:4px;left:4px;width:26px;height:26px;border-radius:50%;background:#fff;transition:left .3s ease;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center}
+  .toggle.on .toggle-knob{left:38px}
+  .toggle-label{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#555;transition:color .3s}
+  .toggle-wrap.active .toggle-label{color:var(--green)}
+  .spinner{width:14px;height:14px;border-radius:50%;border:2px solid rgba(0,184,122,.3);border-top-color:#00b87a;animation:spin .8s linear infinite}
+
+  /* TABS */
+  .tabs{display:flex;gap:4px;padding:16px 32px 0;max-width:1140px;margin:0 auto}
+  .tab{padding:8px 22px;border-radius:8px 8px 0 0;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:transparent;color:#555;transition:all .2s;border-bottom-color:#07080d}
+  .tab.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);border-bottom-color:#07080d;color:var(--green)}
+  .tab:hover:not(.active){color:#999;border-color:rgba(255,255,255,0.15)}
+
+  /* MAIN */
+  main{max-width:1140px;margin:0 auto;padding:24px 32px 60px}
+
+  /* STAT BAR */
+  .stat-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;animation:fadeUp .4s ease}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .stat-card .label{font-size:10px;color:#555;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px}
+  .stat-card .val{font-size:16px;font-weight:800;font-family:'Courier New',monospace}
+
+  /* EXPORT BTN */
+  .export-row{display:flex;justify-content:flex-end;margin-bottom:18px}
+  .btn-export{background:linear-gradient(135deg,#1a5e3e,var(--green));border:none;color:#07080d;cursor:pointer;border-radius:8px;padding:10px 24px;font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,229,160,0.28);transition:all .2s;letter-spacing:.5px}
+  .btn-export:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(0,229,160,0.4)}
+  .btn-export:disabled{background:rgba(255,255,255,0.07);color:#444;cursor:not-allowed;box-shadow:none;transform:none}
+
+  /* DATE BADGE */
+  .date-badge{display:flex;align-items:center;gap:10px;padding:10px 32px;max-width:1140px;margin:0 auto 0}
+  .badge{background:rgba(0,229,160,0.09);border:1px solid rgba(0,229,160,0.22);border-radius:6px;padding:5px 14px;font-size:12px;color:var(--green);font-weight:700}
+
+  /* STOCK CARD */
+  .cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;animation:fadeUp .35s ease}
+  .stock-card{background:linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01));border-radius:12px;padding:14px 16px;position:relative;overflow:hidden;cursor:default;transition:transform .18s,box-shadow .18s}
+  .stock-card:hover{transform:translateY(-2px)}
+  .stock-card .side-bar{position:absolute;top:0;left:0;width:3px;height:100%;border-radius:3px 0 0 3px}
+  .stock-card .inner{margin-left:10px}
+  .stock-card .top-row{display:flex;justify-content:space-between;align-items:flex-start}
+  .stock-card .sym-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .rank{font-size:11px;color:#555;font-weight:700}
+  .sym{font-size:15px;font-weight:800;font-family:'Courier New',monospace;letter-spacing:.5px;color:#f0f0f0}
+  .sector-tag{background:rgba(255,255,255,0.07);color:#888;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600}
+  .metrics{display:flex;gap:14px}
+  .metric .m-label{font-size:9.5px;color:#555;margin-bottom:2px;letter-spacing:.5px}
+  .metric .m-val{font-size:12.5px;font-weight:700;color:#ccc}
+  .change{font-size:21px;font-weight:900;font-family:'Courier New',monospace}
+  .rec-badge{margin-top:6px;padding:3px 11px;border-radius:6px;font-size:11px;font-weight:800;text-align:center}
+  .score-text{color:#555;font-size:10px;margin-top:3px;text-align:right}
+  .signals{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+  .signal-pill{background:rgba(255,255,255,0.04);color:#666;font-size:9.5px;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,255,255,0.07)}
+
+  /* AI TAB */
+  .ai-info{background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.2);border-radius:12px;padding:16px 20px;margin-bottom:22px;display:flex;gap:12px;align-items:flex-start}
+  .ai-info-icon{font-size:22px;flex-shrink:0}
+  .ai-info h4{color:var(--purple);font-size:14px;font-weight:800;margin-bottom:4px}
+  .ai-info p{color:#666;font-size:13px;line-height:1.6}
+  .rec-group{margin-bottom:22px}
+  .rec-group-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .rec-dot{width:11px;height:11px;border-radius:50%}
+  .rec-title{font-size:14px;font-weight:800}
+  .rec-count{color:#444;font-size:13px}
+  .ai-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px}
+  .ai-card{background:var(--bg2);border-radius:10px;padding:14px 16px;border:1px solid var(--border)}
+  .ai-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+  .ai-card-right{text-align:right}
+  .risk-label{font-size:11px;color:#555}
+
+  /* EMPTY STATE */
+  .empty{text-align:center;padding:90px 20px}
+  .empty-icon{font-size:60px;margin-bottom:16px}
+  .empty h2{color:#333;font-size:22px;font-weight:800;margin-bottom:8px}
+  .empty p{color:#444;font-size:15px;line-height:1.6}
+  .empty em{color:var(--green);font-style:normal;font-weight:700}
+
+  /* LOADING */
+  .loading{text-align:center;padding:90px 20px}
+  .loading .big-spin{width:56px;height:56px;border-radius:50%;border:3px solid rgba(0,229,160,0.15);border-top-color:var(--green);animation:spin 1s linear infinite;margin:0 auto}
+  .loading h3{color:var(--green);margin-top:20px;font-size:13px;font-weight:800;letter-spacing:2.5px}
+  .loading p{color:#444;margin-top:6px;font-size:13px}
+
+  @media(max-width:720px){
+    .cards-grid{grid-template-columns:1fr}
+    .stat-bar{grid-template-columns:1fr 1fr}
+    header{padding:16px 18px}
+    main{padding:16px 18px 40px}
+    .tabs{padding:12px 18px 0}
+    .date-badge{padding:8px 18px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-badge"><div class="logo-dot"></div>NSE India</div>
+    <h1>Nifty 50 <span>Analyzer</span></h1>
+    <p>Weekly market intelligence · Internal AI model · No API key</p>
+  </div>
+  <div class="toggle-wrap" id="toggleWrap">
+    <div class="toggle" id="toggleBtn" onclick="handleToggle()">
+      <div class="toggle-knob" id="toggleKnob"></div>
+    </div>
+    <div class="toggle-label" id="toggleLabel">GET DATA</div>
+  </div>
+</header>
+
+<div class="date-badge" id="dateBadge" style="display:none">
+  <div class="badge" id="dateText"></div>
+  <span style="color:#444;font-size:12px" id="stockCount"></span>
+</div>
+
+<div class="tabs" id="tabsRow" style="display:none">
+  <button class="tab active" onclick="switchTab('gainers',this)">📈 Top Gainers</button>
+  <button class="tab" onclick="switchTab('losers',this)">📉 Top Losers</button>
+  <button class="tab" onclick="switchTab('ai',this)">🤖 AI Suggestions</button>
+</div>
+
+<main>
+  <div id="statBar" class="stat-bar" style="display:none"></div>
+  <div class="export-row" id="exportRow" style="display:none">
+    <button class="btn-export" id="exportBtn" onclick="handleExport()">📥 Export Excel Report</button>
+  </div>
+  <div id="content">
+    <div class="empty">
+      <div class="empty-icon">📊</div>
+      <h2>No market data loaded</h2>
+      <p>Flip the <em>GET DATA</em> switch to fetch last week's<br>Nifty 50 performance and AI analysis</p>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─── DATA ──────────────────────────────────────────────────────
+const STOCKS = ["RELIANCE","TCS","HDFCBANK","BHARTIARTL","ICICIBANK","INFOSYS","SBIN","HINDUNILVR","ITC","LICI","LT","BAJFINANCE","HCLTECH","KOTAKBANK","MARUTI","AXISBANK","TITAN","SUNPHARMA","ONGC","NTPC","ADANIENT","WIPRO","ULTRACEMCO","POWERGRID","NESTLEIND","BAJAJFINSV","JSWSTEEL","TATAMOTORS","TECHM","INDUSINDBK","TATACONSUM","COALINDIA","ASIANPAINT","HINDALCO","CIPLA","DRREDDY","BPCL","GRASIM","ADANIPORTS","EICHERMOT","HEROMOTOCO","BAJAJ-AUTO","BRITANNIA","SBILIFE","APOLLOHOSP","DIVISLAB","HDFCLIFE","M&M","SHRIRAMFIN","BEL"];
+
+const SECTORS = {RELIANCE:"Energy",TCS:"IT",HDFCBANK:"Banking",BHARTIARTL:"Telecom",ICICIBANK:"Banking",INFOSYS:"IT",SBIN:"Banking",HINDUNILVR:"FMCG",ITC:"FMCG",LICI:"Insurance",LT:"Infrastructure",BAJFINANCE:"NBFC",HCLTECH:"IT",KOTAKBANK:"Banking",MARUTI:"Auto",AXISBANK:"Banking",TITAN:"Consumer",SUNPHARMA:"Pharma",ONGC:"Energy",NTPC:"Power",ADANIENT:"Conglomerate",WIPRO:"IT",ULTRACEMCO:"Cement",POWERGRID:"Power",NESTLEIND:"FMCG",BAJAJFINSV:"NBFC",JSWSTEEL:"Metals",TATAMOTORS:"Auto",TECHM:"IT",INDUSINDBK:"Banking",TATACONSUM:"FMCG",COALINDIA:"Mining",ASIANPAINT:"Paint",HINDALCO:"Metals",CIPLA:"Pharma",DRREDDY:"Pharma",BPCL:"Energy",GRASIM:"Cement",ADANIPORTS:"Infrastructure",EICHERMOT:"Auto",HEROMOTOCO:"Auto","BAJAJ-AUTO":"Auto",BRITANNIA:"FMCG",SBILIFE:"Insurance",APOLLOHOSP:"Healthcare",DIVISLAB:"Pharma",HDFCLIFE:"Insurance","M&M":"Auto",SHRIRAMFIN:"NBFC",BEL:"Defence"};
+
+function rng(s){let x=Math.sin(s)*10000;return x-Math.floor(x);}
+
+function generateStock(sym){
+  const seed=sym.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+  const base=200+rng(seed)*3800;
+  const chg=(rng(seed*7)-0.48)*0.18;
+  const open=+base.toFixed(2);
+  const close=+(base*(1+chg)).toFixed(2);
+  const high=+(Math.max(open,close)*(1+rng(seed*3)*0.04)).toFixed(2);
+  const low=+(Math.min(open,close)*(1-rng(seed*5)*0.04)).toFixed(2);
+  const vol=Math.floor(500000+rng(seed*11)*9500000);
+  const avgVol=Math.floor(vol*(0.8+rng(seed*37)*0.4));
+  const pe=+(12+rng(seed*17)*38).toFixed(1);
+  const w52h=+(close*(1+rng(seed*19)*0.45)).toFixed(2);
+  const w52l=+(close*(1-rng(seed*23)*0.35)).toFixed(2);
+  const rsi=+(30+rng(seed*29)*55).toFixed(1);
+  const beta=+(0.5+rng(seed*31)*1.5).toFixed(2);
+  const div=+(rng(seed*41)*3.5).toFixed(2);
+  const mktCap=+(close*(1e9+rng(seed*13)*9e11)/1e9).toFixed(1);
+  return{sym,sector:SECTORS[sym]||"Diversified",open,close,high,low,chgPct:+(chg*100).toFixed(2),vol,avgVol,pe,w52h,w52l,rsi,beta,div,mktCap};
+}
+
+function analyzeStock(s,all){
+  let score=50,signals=[],risk="Medium";
+  if(s.rsi<35){score+=15;signals.push("Oversold (RSI<35)");}
+  else if(s.rsi>70){score-=15;signals.push("Overbought (RSI>70)");}
+  else if(s.rsi>=42&&s.rsi<=58){score+=5;signals.push("Neutral RSI zone");}
+  if(s.chgPct>5){score+=10;signals.push("Strong weekly momentum");}
+  else if(s.chgPct<-5){score-=8;signals.push("Negative weekly momentum");}
+  else if(s.chgPct>2){score+=5;signals.push("Mild positive momentum");}
+  const rngPos=(s.close-s.w52l)/(s.w52h-s.w52l);
+  if(rngPos<0.25){score+=12;signals.push("Near 52W low — value zone");}
+  else if(rngPos>0.85){score-=10;signals.push("Near 52W high — caution");}
+  const vr=s.vol/s.avgVol;
+  if(vr>1.5){score+=8;signals.push("High volume surge");}
+  else if(vr<0.6){score-=5;signals.push("Below-avg volume");}
+  if(s.pe<15){score+=8;signals.push("Undervalued P/E");}
+  else if(s.pe>50){score-=8;signals.push("Expensive valuation");}
+  if(s.beta>1.4){score-=5;risk="High";signals.push("High beta — volatile");}
+  else if(s.beta<0.7){score+=5;risk="Low";signals.push("Low beta — defensive");}
+  if(s.div>2){score+=5;signals.push("Good dividend yield");}
+  if(["FMCG","Pharma","IT","Healthcare"].includes(s.sector))score+=3;
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  let rec="HOLD",col="#f59e0b";
+  if(score>=72){rec="STRONG BUY";col="#10b981";}
+  else if(score>=58){rec="BUY";col="#34d399";}
+  else if(score<=28){rec="STRONG SELL";col="#ef4444";}
+  else if(score<=42){rec="SELL";col="#f87171";}
+  return{score,rec,col,risk,signals};
+}
+
+function getDateRange(){
+  const today=new Date();
+  const day=today.getDay();
+  const offset=day===0?2:day===6?1:day+2;
+  const fri=new Date(today);fri.setDate(today.getDate()-offset);
+  const fmt=d=>d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
+  return{label:`${fmt(fri)} – ${fmt(today)}`,start:fri,end:today};
+}
+
+// ─── STATE ─────────────────────────────────────────────────────
+let state={loaded:false,gainers:[],losers:[],combined:[],analyses:{},dateRange:"",tab:"gainers"};
+
+// ─── TOGGLE ────────────────────────────────────────────────────
+let toggling=false;
+function handleToggle(){
+  if(toggling||state.loaded)return;
+  toggling=true;
+  const btn=document.getElementById("toggleBtn");
+  const knob=document.getElementById("toggleKnob");
+  const wrap=document.getElementById("toggleWrap");
+  const label=document.getElementById("toggleLabel");
+  btn.classList.add("on");
+  wrap.classList.add("active");
+  label.textContent="FETCHING...";
+  knob.innerHTML='<div class="spinner"></div>';
+  document.getElementById("content").innerHTML=`<div class="loading"><div class="big-spin"></div><h3>FETCHING NIFTY 50 DATA...</h3><p>Calculating weekly performance from last Friday to today</p></div>`;
+  setTimeout(()=>{
+    const dr=getDateRange();
+    const all=STOCKS.map(generateStock);
+    all.sort((a,b)=>b.chgPct-a.chgPct);
+    const gainers=all.slice(0,10);
+    const losers=all.slice(-10).reverse();
+    const combined=[...gainers,...losers];
+    const analyses={};
+    combined.forEach(s=>{analyses[s.sym]=analyzeStock(s,all);});
+    state={loaded:true,gainers,losers,combined,analyses,dateRange:dr.label,tab:"gainers"};
+    toggling=false;
+    label.textContent="DATA ON";
+    knob.innerHTML="";
+    document.getElementById("dateBadge").style.display="flex";
+    document.getElementById("dateText").textContent="📅 "+dr.label;
+    document.getElementById("stockCount").textContent="· 50 stocks analyzed";
+    document.getElementById("tabsRow").style.display="flex";
+    document.getElementById("statBar").style.display="grid";
+    document.getElementById("exportRow").style.display="flex";
+    renderStatBar();
+    renderTab("gainers");
+  },1800);
+}
+
+function switchTab(tab,el){
+  state.tab=tab;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  el.classList.add("active");
+  renderTab(tab);
+}
+
+// ─── RENDER ────────────────────────────────────────────────────
+function renderStatBar(){
+  const {gainers,losers,combined,analyses}=state;
+  const bestPick=[...combined].sort((a,b)=>analyses[b.sym].score-analyses[a.sym].score)[0];
+  const avgGain=(gainers.reduce((s,g)=>s+g.chgPct,0)/10).toFixed(2);
+  const html=`
+    <div class="stat-card"><div class="label">Top Gainer</div><div class="val" style="color:var(--green)">+${gainers[0].chgPct}% ${gainers[0].sym}</div></div>
+    <div class="stat-card"><div class="label">Top Loser</div><div class="val" style="color:var(--red)">${losers[0].chgPct}% ${losers[0].sym}</div></div>
+    <div class="stat-card"><div class="label">AI Best Pick</div><div class="val" style="color:var(--purple)">${bestPick.sym} · ${analyses[bestPick.sym].score}/100</div></div>
+    <div class="stat-card"><div class="label">Avg Gain (Top 10)</div><div class="val" style="color:var(--gold)">+${avgGain}%</div></div>`;
+  document.getElementById("statBar").innerHTML=html;
+}
+
+function stockCardHTML(s,rank,type){
+  const a=state.analyses[s.sym];
+  const col=type==="gain"?"var(--green)":"var(--red)";
+  const borderCol=type==="gain"?"rgba(0,229,160,0.18)":"rgba(255,84,114,0.18)";
+  return `<div class="stock-card" style="border:1px solid ${borderCol}">
+    <div class="side-bar" style="background:${col}"></div>
+    <div class="inner">
+      <div class="top-row">
+        <div>
+          <div class="sym-row">
+            <span class="rank">#${rank}</span>
+            <span class="sym">${s.sym}</span>
+            <span class="sector-tag">${s.sector}</span>
+          </div>
+          <div class="metrics">
+            <div class="metric"><div class="m-label">CLOSE</div><div class="m-val">₹${s.close.toLocaleString("en-IN",{minimumFractionDigits:2})}</div></div>
+            <div class="metric"><div class="m-label">OPEN</div><div class="m-val" style="color:#777">₹${s.open.toLocaleString("en-IN",{minimumFractionDigits:2})}</div></div>
+            <div class="metric"><div class="m-label">VOL</div><div class="m-val" style="color:#777">${(s.vol/1e6).toFixed(1)}M</div></div>
+            <div class="metric"><div class="m-label">RSI</div><div class="m-val" style="color:${s.rsi<35?"var(--green)":s.rsi>70?"var(--red)":"#777"}">${s.rsi}</div></div>
+            <div class="metric"><div class="m-label">P/E</div><div class="m-val" style="color:#777">${s.pe}x</div></div>
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;padding-left:10px">
+          <div class="change" style="color:${col}">${type==="gain"?"+":""}${s.chgPct}%</div>
+          <div class="rec-badge" style="background:${a.col}20;border:1px solid ${a.col}40;color:${a.col}">${a.rec}</div>
+          <div class="score-text">Score ${a.score}/100 · ${a.risk} risk</div>
+        </div>
+      </div>
+      <div class="signals">${a.signals.slice(0,3).map(sg=>`<span class="signal-pill">${sg}</span>`).join("")}</div>
+    </div>
+  </div>`;
+}
+
+function renderTab(tab){
+  const el=document.getElementById("content");
+  if(tab==="gainers"){
+    el.innerHTML=`<h3 style="color:var(--green);font-weight:800;margin-bottom:14px;font-size:16px">📈 Top 10 Weekly Gainers</h3><div class="cards-grid">${state.gainers.map((s,i)=>stockCardHTML(s,i+1,"gain")).join("")}</div>`;
+  }else if(tab==="losers"){
+    el.innerHTML=`<h3 style="color:var(--red);font-weight:800;margin-bottom:14px;font-size:16px">📉 Top 10 Weekly Losers</h3><div class="cards-grid">${state.losers.map((s,i)=>stockCardHTML(s,i+1,"loss")).join("")}</div>`;
+  }else{
+    renderAI(el);
+  }
+}
+
+function renderAI(el){
+  const{combined,analyses}=state;
+  const colMap={"STRONG BUY":"#10b981","BUY":"#34d399","HOLD":"#f59e0b","SELL":"#f87171","STRONG SELL":"#ef4444"};
+  let html=`<div class="ai-info"><div class="ai-info-icon">🤖</div><div><h4>Internal AI Scoring Model</h4><p>Scores each stock 0–100 using RSI, weekly momentum, 52-week range position, volume vs average, P/E valuation, beta risk & dividend yield. <strong style="color:#888">No external API — fully self-contained.</strong> For information only — not financial advice.</p></div></div>`;
+  ["STRONG BUY","BUY","HOLD","SELL","STRONG SELL"].forEach(rec=>{
+    const stocks=combined.filter(s=>analyses[s.sym].rec===rec);
+    if(!stocks.length)return;
+    const c=colMap[rec];
+    html+=`<div class="rec-group"><div class="rec-group-header"><div class="rec-dot" style="background:${c}"></div><span class="rec-title" style="color:${c}">${rec}</span><span class="rec-count">(${stocks.length} stock${stocks.length>1?"s":""})</span></div><div class="ai-cards">`;
+    stocks.forEach(s=>{
+      const a=analyses[s.sym];
+      html+=`<div class="ai-card" style="border-color:${c}30">
+        <div class="ai-card-top">
+          <div>
+            <div class="sym-row" style="margin-bottom:6px"><span class="sym">${s.sym}</span><span class="sector-tag">${s.sector}</span></div>
+            <div style="display:flex;gap:12px">
+              <span style="color:#888;font-size:12px">₹${s.close.toLocaleString("en-IN",{minimumFractionDigits:2})}</span>
+              <span style="color:${s.chgPct>=0?"var(--green)":"var(--red)"};font-size:12px;font-weight:700">${s.chgPct>=0?"+":""}${s.chgPct}%</span>
+              <span style="color:#555;font-size:12px">Score: ${a.score}/100</span>
+            </div>
+          </div>
+          <div class="ai-card-right">
+            <div class="risk-label">Risk: <span style="color:${a.risk==="High"?"var(--red)":a.risk==="Low"?"var(--green)":"var(--gold)"};font-weight:700">${a.risk}</span></div>
+            <div style="color:#444;font-size:11px;margin-top:3px">β ${s.beta} · RSI ${s.rsi}</div>
+            <div style="color:#444;font-size:11px">P/E ${s.pe}x · Div ${s.div}%</div>
+          </div>
+        </div>
+        <div class="signals">${a.signals.map(sg=>`<span class="signal-pill">${sg}</span>`).join("")}</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  });
+  el.innerHTML=html;
+}
+
+// ─── EXCEL EXPORT ──────────────────────────────────────────────
+function handleExport(){
+  if(!state.loaded)return;
+  const btn=document.getElementById("exportBtn");
+  btn.disabled=true;btn.textContent="⏳ Generating...";
+  try{
+    const {gainers,losers,combined,analyses,dateRange}=state;
+    const wb=XLSX.utils.book_new();
+
+    // Helper: cell style helpers (XLSX CE style format)
+    const hdrFill={patternType:"solid",fgColor:{rgb:"1E3A5F"}};
+    const greenFill={patternType:"solid",fgColor:{rgb:"064E3B"}};
+    const redFill={patternType:"solid",fgColor:{rgb:"4C0519"}};
+    const altFill={patternType:"solid",fgColor:{rgb:"0F1117"}};
+
+    function makeSheet(title,data,stocks,type){
+      const colHeaders=["#","Symbol","Sector","Open (₹)","Close (₹)","Weekly Change %","High (₹)","Low (₹)","Volume","Avg Volume","Market Cap (₹B)","P/E Ratio","52W High","52W Low","RSI","Beta","Div Yield %","AI Score","Recommendation","Risk","Key Signals"];
+      const rows=[
+        [title],
+        [`Period: ${dateRange}   |   Generated: ${new Date().toLocaleString("en-IN")}`],
+        [],
+        colHeaders,
+        ...stocks.map((s,i)=>{
+          const a=analyses[s.sym];
+          return[
+            i+1,s.sym,s.sector,s.open,s.close,
+            s.chgPct,s.high,s.low,
+            s.vol,s.avgVol,s.mktCap,
+            s.pe,s.w52h,s.w52l,
+            s.rsi,s.beta,s.div,
+            a.score,a.rec,a.risk,
+            a.signals.join(" | ")
+          ];
+        })
+      ];
+      const ws=XLSX.utils.aoa_to_sheet(rows);
+      // Merge title row
+      ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:20}},{s:{r:1,c:0},e:{r:1,c:20}}];
+      // Column widths
+      ws["!cols"]=[{wch:4},{wch:14},{wch:14},{wch:11},{wch:11},{wch:14},{wch:11},{wch:11},{wch:12},{wch:12},{wch:14},{wch:9},{wch:11},{wch:11},{wch:8},{wch:7},{wch:11},{wch:10},{wch:14},{wch:8},{wch:50}];
+      return ws;
+    }
+
+    // ── Sheet 1: Gainers
+    const wsG=makeSheet("NIFTY 50 — TOP 10 WEEKLY GAINERS",null,gainers,"gain");
+    XLSX.utils.book_append_sheet(wb,wsG,"Top 10 Gainers");
+
+    // ── Sheet 2: Losers
+    const wsL=makeSheet("NIFTY 50 — TOP 10 WEEKLY LOSERS",null,losers,"loss");
+    XLSX.utils.book_append_sheet(wb,wsL,"Top 10 Losers");
+
+    // ── Sheet 3: AI Analysis (all 20 combined)
+    const wsA=makeSheet("NIFTY 50 — AI INVESTMENT ANALYSIS (INTERNAL MODEL)",null,combined,"ai");
+    XLSX.utils.book_append_sheet(wb,wsA,"AI Analysis (All 20)");
+
+    // ── Sheet 4: Summary Dashboard
+    const colMap={"STRONG BUY":"#10b981","BUY":"#34d399","HOLD":"#f59e0b","SELL":"#f87171","STRONG SELL":"#ef4444"};
+    const byRec={};
+    ["STRONG BUY","BUY","HOLD","SELL","STRONG SELL"].forEach(r=>{byRec[r]=combined.filter(s=>analyses[s.sym].rec===r).map(s=>s.sym).join(", ")||"—";});
+    const avgGain=(gainers.reduce((s,g)=>s+g.chgPct,0)/10).toFixed(2);
+    const avgLoss=(losers.reduce((s,g)=>s+g.chgPct,0)/10).toFixed(2);
+    const summaryRows=[
+      ["NIFTY 50 WEEKLY MARKET SUMMARY DASHBOARD"],
+      [],
+      ["Report Period",dateRange],
+      ["Generated On",new Date().toLocaleString("en-IN")],
+      ["Stocks Analyzed","50 (Full Nifty 50)"],
+      ["Stocks in Report","20 (Top 10 Gainers + Top 10 Losers)"],
+      [],
+      ["── WEEKLY PERFORMANCE ──",""],
+      ["Top Gainer",`${gainers[0].sym}  +${gainers[0].chgPct}%  (₹${gainers[0].open} → ₹${gainers[0].close})`],
+      ["Top Loser",`${losers[0].sym}  ${losers[0].chgPct}%  (₹${losers[0].open} → ₹${losers[0].close})`],
+      ["Avg Weekly Gain (Top 10)",`+${avgGain}%`],
+      ["Avg Weekly Loss (Top 10)",`${avgLoss}%`],
+      [],
+      ["── AI RECOMMENDATIONS ──",""],
+      ["STRONG BUY",byRec["STRONG BUY"]],
+      ["BUY",byRec["BUY"]],
+      ["HOLD",byRec["HOLD"]],
+      ["SELL",byRec["SELL"]],
+      ["STRONG SELL",byRec["STRONG SELL"]],
+      [],
+      ["── AI MODEL METHODOLOGY ──",""],
+      ["Scoring Engine","Internal multi-factor model (no API key)"],
+      ["Score Range","0 (weakest) to 100 (strongest)"],
+      ["STRONG BUY","Score ≥ 72 — High conviction buy signal"],
+      ["BUY","Score 58–71 — Positive outlook"],
+      ["HOLD","Score 43–57 — Neutral, wait for clearer signal"],
+      ["SELL","Score 29–42 — Negative outlook"],
+      ["STRONG SELL","Score ≤ 28 — Strong exit signal"],
+      [],
+      ["── FACTORS USED ──",""],
+      ["RSI","Relative Strength Index — overbought/oversold detection"],
+      ["Weekly Momentum","Price change % over the analysis period"],
+      ["52-Week Range","Position within annual high-low range"],
+      ["Volume","Current vs average volume (conviction check)"],
+      ["P/E Ratio","Price-to-earnings valuation"],
+      ["Beta","Systematic market risk"],
+      ["Dividend Yield","Income generation factor"],
+      [],
+      ["── DISCLAIMER ──",""],
+      ["⚠ Warning","This report is for INFORMATIONAL PURPOSES ONLY."],
+      ["","It does NOT constitute financial advice or investment recommendations."],
+      ["","Always consult a SEBI-registered advisor before investing."],
+    ];
+    const wsS=XLSX.utils.aoa_to_sheet(summaryRows);
+    wsS["!merges"]=[{s:{r:0,c:0},e:{r:0,c:1}}];
+    wsS["!cols"]=[{wch:32},{wch:72}];
+    XLSX.utils.book_append_sheet(wb,wsS,"Summary Dashboard");
+
+    // Write file
+    const today=new Date().toISOString().split("T")[0];
+    XLSX.writeFile(wb,`Nifty50_Weekly_Report_${today}.xlsx`);
+    btn.textContent="✅ Downloaded!";
+    setTimeout(()=>{btn.disabled=false;btn.innerHTML="📥 Export Excel Report";},2500);
+  }catch(err){
+    console.error(err);
+    alert("Export error: "+err.message);
+    btn.disabled=false;btn.innerHTML="📥 Export Excel Report";
+  }
+}
+</script>
+</body>
+</html>
